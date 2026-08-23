@@ -65,11 +65,35 @@ disagree with each other.
   ones), builds `mpy-cross`, then runs the port build with
   `USER_C_MODULES=`/`FROZEN_MANIFEST=` pointed at the caller's own
   `usermod/`. `extra_make_args` carries a module's own defines (e.g.
-  bclibc's `MP_BCLIBC_PRECISION=double`). Same `MPY_DIR` + checkout
+  bclibc's `MP_BCLIBC_PRECISION=double`); `variant` (default `standard`)
+  carries a caller building against upstream's own `VARIANT=coverage`
+  recipe instead (a7p's armhf/mipsel qemu legs do). `build_dir` accepts a
+  bare relative value (e.g. `build-wasm3`) as well as an absolute one --
+  it resolves against `$MPY_DIR/ports/unix` the same way a bare `BUILD=`
+  on the command line always did, for a caller whose own default isn't
+  this action's `usermod/build/<arch>`. Same `MPY_DIR` + checkout
   prerequisite as `build-natmod-arch`; the caller's own matrix still
   chooses `runs-on:` per arch (`ubuntu-24.04-arm` for aarch64/armhf,
   `ubuntu-latest` otherwise) -- a composite action can't pick its own
   runner.
+- **`build-usermod-windows-arch`** -- the `ports/windows` half of the same
+  usermod build, run inside an MSYS2 shell (`shell: msys2 {0}`): builds
+  `mpy-cross` then the port itself, including the four CLANGARM64-only
+  overrides every consuming repo's Windows row needed
+  (`LDFLAGS_ARCH`/`COMPILER_TARGET` because CLANGARM64 links via clang+lld
+  rather than GNU ld/gcc, `STRIP=""`/`SIZE="true"` because that toolchain
+  ships neither binary). Deliberately narrower than
+  `build-usermod-unix-arch`: fetching MicroPython and setting up MSYS2 stay
+  the caller's job, since neither can happen inside this action's own
+  steps -- `msys2/setup-msys2` has to already have run in the calling job
+  (this action only builds, it doesn't set up the shell it builds in), and
+  `fetch-micropython`/`clone-micropython` can't be reused here either
+  (their `shell: bash` steps run under plain Git Bash on a Windows runner,
+  which has no `wget`, and `$GITHUB_WORKSPACE` there is a native
+  `D:\a\...` path -- MSYS2 bash's own escape character eats those
+  backslashes on any command line built from it directly). Every path
+  input here defaults to a `$(pwd)`-relative value for the same reason,
+  never an absolute default.
 
 ### Usage example
 
