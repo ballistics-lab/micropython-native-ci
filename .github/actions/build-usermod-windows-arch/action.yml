@@ -52,6 +52,17 @@ inputs:
       port's -Werror under clang.
     required: false
     default: ""
+  variant:
+    description: >
+      Value for VARIANT= on the main build only (not mpy-cross). Empty by
+      default and then omitted from the command line entirely, matching
+      every caller this was extracted from -- none of them ever passed
+      VARIANT= for ports/windows (unlike build-usermod-unix-arch's own
+      `variant`, ports/windows has no variants/<name>/ split in any of
+      those three repos, just a bare variants/manifest.py default). Here
+      for a future caller whose own fork of the port does define one.
+    required: false
+    default: ""
 
 outputs:
   build_dir:
@@ -107,7 +118,12 @@ runs:
       # mpy-cross step above; ports/windows reaches the identical generic
       # py/mkrules.mk link recipe.
       run: |
+        VARIANT_ARG=""
+        if [ -n "${{ inputs.variant }}" ]; then
+          VARIANT_ARG="VARIANT=${{ inputs.variant }}"
+        fi
         make -C "$MPY_DIR/ports/windows" \
+          $VARIANT_ARG \
           BUILD="${{ inputs.build_dir }}" \
           COMPILER_TARGET="mingw-forced" \
           STRIP="" SIZE="true" \

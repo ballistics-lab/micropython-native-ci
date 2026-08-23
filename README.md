@@ -40,60 +40,137 @@ disagree with each other.
 
 ### Composite actions (`.github/actions/`)
 
-- **`fetch-micropython`** -- downloads and extracts a MicroPython release
-  tarball, exports `MPY_DIR`. Use this for a plain natmod build or a unix
-  port build; the tarball already vendors every port's `lib/` submodules.
-- **`clone-micropython`** -- shallow git-clones a MicroPython release
-  branch instead, with a chosen set of submodules initialised (e.g.
-  `lib/pico-sdk` for an rp2 firmware build) and exports `MPY_DIR`. Clones
-  into `micropython/` by default; pass `path:` if the calling repo already
-  has a top-level directory of that name (a7p does -- its own MicroPython
-  subtree lives at `micropython/`, so its jobs pass `path: mpy`).
-- **`build-natmod-arch`** -- installs whatever toolchain a single
-  `dynruntime.mk` `ARCH` needs (plain apt package, the `xtensa-lx106`
-  tarball, or esp-idf -- dispatched per arch, exactly matching what each of
-  the three source repos already did by hand), builds `mpy-cross`, then
-  runs `make ARCH=<arch> dist` in the natmod directory. `natmod_dir`
-  defaults to `natmod` (a7p passes `micropython/natmod`); an optional
-  `pre_build_command` runs first (a7p uses this for `make fetch-nanopb`).
-  Requires `MPY_DIR` to already be set (i.e. run `fetch-micropython` or
-  `clone-micropython` first) and the calling repo already checked out.
-- **`build-usermod-unix-arch`** -- the unix-port cross-compile matrix for a
-  `USER_C_MODULES` usermod: `x64`, `x86` (32-bit), `aarch64`, `armhf`, or
-  `mipsel`. Installs the arch's toolchain (apt package, qemu-user-static
-  for the emulated ones, a from-source libffi for the statically-linked
-  ones), builds `mpy-cross`, then runs the port build with
-  `USER_C_MODULES=`/`FROZEN_MANIFEST=` pointed at the caller's own
-  `usermod/`. `extra_make_args` carries a module's own defines (e.g.
-  bclibc's `MP_BCLIBC_PRECISION=double`); `variant` (default `standard`)
-  carries a caller building against upstream's own `VARIANT=coverage`
-  recipe instead (a7p's armhf/mipsel qemu legs do). `build_dir` accepts a
-  bare relative value (e.g. `build-wasm3`) as well as an absolute one --
-  it resolves against `$MPY_DIR/ports/unix` the same way a bare `BUILD=`
-  on the command line always did, for a caller whose own default isn't
-  this action's `usermod/build/<arch>`. Same `MPY_DIR` + checkout
-  prerequisite as `build-natmod-arch`; the caller's own matrix still
-  chooses `runs-on:` per arch (`ubuntu-24.04-arm` for aarch64/armhf,
-  `ubuntu-latest` otherwise) -- a composite action can't pick its own
-  runner.
-- **`build-usermod-windows-arch`** -- the `ports/windows` half of the same
-  usermod build, run inside an MSYS2 shell (`shell: msys2 {0}`): builds
-  `mpy-cross` then the port itself, including the four CLANGARM64-only
-  overrides every consuming repo's Windows row needed
-  (`LDFLAGS_ARCH`/`COMPILER_TARGET` because CLANGARM64 links via clang+lld
-  rather than GNU ld/gcc, `STRIP=""`/`SIZE="true"` because that toolchain
-  ships neither binary). Deliberately narrower than
-  `build-usermod-unix-arch`: fetching MicroPython and setting up MSYS2 stay
-  the caller's job, since neither can happen inside this action's own
-  steps -- `msys2/setup-msys2` has to already have run in the calling job
-  (this action only builds, it doesn't set up the shell it builds in), and
-  `fetch-micropython`/`clone-micropython` can't be reused here either
-  (their `shell: bash` steps run under plain Git Bash on a Windows runner,
-  which has no `wget`, and `$GITHUB_WORKSPACE` there is a native
-  `D:\a\...` path -- MSYS2 bash's own escape character eats those
-  backslashes on any command line built from it directly). Every path
-  input here defaults to a `$(pwd)`-relative value for the same reason,
-  never an absolute default.
+Every table below is the action's complete input surface -- if it isn't
+listed here, the action doesn't accept it. `MPY_DIR` in a "Requires"
+line means `fetch-micropython` or `clone-micropython` (this repo's own)
+must have already run in the same job; a composite action step can't set
+an env var that steps *before* it will see, only ones after.
+
+#### `fetch-micropython`
+
+Downloads and extracts a MicroPython release tarball, exports `MPY_DIR`.
+Use for a plain natmod build or a unix-port build; the tarball already
+vendors every port's `lib/` submodules, so no submodule init is needed.
+Not usable on a Windows runner outside MSYS2 -- it shells out to `wget`,
+which plain Git Bash doesn't have (see `build-usermod-windows-arch` below
+for why the Windows actions never call it either).
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `mpy_tag` | yes | -- | MicroPython release tag, e.g. `v1.28.0` |
+
+No outputs; exports `MPY_DIR` to `$GITHUB_ENV` as a side effect.
+
+#### `clone-micropython`
+
+Shallow git-clones a MicroPython release branch instead of fetching a
+tarball, with a chosen set of submodules initialised, and exports
+`MPY_DIR`. Use this when the build needs a submodule the release tarball
+doesn't vendor (`lib/pico-sdk` for an rp2 firmware build, for instance) --
+or, as a7p and now bclibc/wasm3's own webassembly/rp2040/windows-adjacent
+jobs use it, any time the caller needs `MPY_DIR` set without dragging in
+`fetch-micropython`'s `wget` dependency.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `mpy_tag` | yes | -- | MicroPython release tag |
+| `submodules` | no | `''` | Space-separated submodules to `git submodule update --init` (empty = skip) |
+| `pico_sdk_submodules` | no | `'false'` | Also run `git -C lib/pico-sdk submodule update --init` (rp2040 builds) |
+| `path` | no | `'micropython'` | Clone destination, relative to the workspace root -- override when the caller's own repo already has a top-level directory of that name (a7p passes `path: mpy`, since its own MicroPython subtree already lives at `micropython/`) |
+
+No outputs; exports `MPY_DIR` to `$GITHUB_ENV` as a side effect.
+
+#### `build-natmod-arch`
+
+Installs whatever toolchain a single `dynruntime.mk` `ARCH` needs (plain
+apt package, the `xtensa-lx106` tarball, or esp-idf -- dispatched per
+arch, matching `dynruntime.mk`'s own `CROSS` choices), builds `mpy-cross`,
+then runs `make ARCH=<arch> dist` in the natmod directory.
+
+Requires: `MPY_DIR` (see above) and the calling repo already checked out,
+submodules included if the natmod Makefile needs any.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `arch` | yes | -- | `x64`, `x86`, `armv6m`, `armv7m`, `armv7emsp`, `armv7emdp`, `rv32imc`, `rv64imc`, `xtensa`, or `xtensawin` (no `aarch64` -- `dynruntime.mk` has none as of MicroPython ≤ v1.28; build that via a usermod instead) |
+| `natmod_dir` | no | `natmod` | Path to the directory containing `natmod/Makefile`, relative to the workspace root (a7p passes `micropython/natmod`) |
+| `esp_idf_ver` | no | `v5.4` | esp-idf tag to install for the `xtensawin` toolchain |
+| `extra_pip` | no | `''` | Extra space-separated pip packages, alongside `pyelftools`/`ar` (always installed -- `mpy_ld.py` needs them for every ARCH) |
+| `pre_build_command` | no | `''` | Shell command run once inside `natmod_dir`, after `mpy-cross` and before `make dist` (a7p uses `make fetch-nanopb`) |
+
+No outputs.
+
+#### `build-usermod-unix-arch`
+
+The unix-port cross-compile matrix for a `USER_C_MODULES` usermod: `x64`,
+`x86` (32-bit), `aarch64`, `armhf`, or `mipsel`. Installs the arch's
+toolchain (apt package, qemu-user-static for the emulated ones, a
+from-source libffi for the statically-linked ones), builds `mpy-cross`,
+then runs the port build.
+
+Requires: `MPY_DIR` and checkout, same as `build-natmod-arch`. The
+caller's own matrix still has to choose `runs-on:` per arch
+(`ubuntu-24.04-arm` for `aarch64`/`armhf` -- both execute natively there,
+not under an emulator; `ubuntu-latest` for the rest, `mipsel` included --
+it stays under `qemu-user-static`, since GitHub has no mips runner) -- a
+composite action can't pick its own runner.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `arch` | yes | -- | `x64`, `x86`, `aarch64`, `armhf`, or `mipsel` |
+| `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE` | Value for `USER_C_MODULES=` |
+| `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command (e.g. bclibc's `MP_BCLIBC_PRECISION=double`) |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/<arch>` | Value for `BUILD=`. A bare relative value (no leading `/`, e.g. `build-wasm3`) resolves against `$MPY_DIR/ports/unix` instead, the same way a bare `BUILD=` on the command line always did |
+| `variant` | no | `standard` | Value for `VARIANT=`. A caller building against upstream's own `VARIANT=coverage` recipe (a7p's armhf/mipsel qemu legs used to) overrides this |
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find the built binary without recomputing it |
+
+#### `build-usermod-windows-arch`
+
+The `ports/windows` half of the same usermod build, run inside an MSYS2
+shell (every step is `shell: msys2 {0}`): builds `mpy-cross` then the
+port itself, including the four CLANGARM64-only overrides every
+consuming repo's Windows row needed (`LDFLAGS_ARCH`/`COMPILER_TARGET`
+because CLANGARM64 links via clang+lld rather than GNU ld/gcc,
+`STRIP=""`/`SIZE="true"` because that toolchain ships neither binary).
+
+Deliberately narrower than `build-usermod-unix-arch`: fetching MicroPython
+and setting up MSYS2 both stay the caller's own job. Requires:
+
+- `MPY_DIR`, exported to a **POSIX-style path** (no backslashes -- MSYS2
+  bash's own escape character eats them on any unquoted command line built
+  from a native `D:\a\...` value, a real failure documented in every
+  caller this was extracted from). Neither `fetch-micropython` nor
+  `clone-micropython` is safe to use for this on a Windows runner as-is:
+  the former shells out to `wget`, which plain Git Bash doesn't have, and
+  the latter's own `$GITHUB_WORKSPACE`-derived `MPY_DIR` is the native
+  backslash form. Every caller this was extracted from sets `MPY_DIR`
+  itself with an inline `curl`+`$(pwd)` step instead.
+- `msys2/setup-msys2` already run in the calling job, with the target
+  `msystem`. This action's own steps can't do it for themselves --
+  they're composite-action steps, so their `shell:` is fixed at
+  `msys2 {0}` regardless of what ran before them in the *calling* job,
+  and that shell wrapper only exists on `PATH` once `setup-msys2` has
+  put it there.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `user_c_modules` | no | `$(pwd)` | Value for `USER_C_MODULES=` |
+| `frozen_manifest` | no | `$(pwd)/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs, e.g. a custom `PROG=` (wasm3 uses `PROG=micropython-wasm3.exe`) |
+| `build_dir` | no | `build-standard` | Value for `BUILD=` -- a bare relative value, resolving against `$MPY_DIR/ports/windows` |
+| `cflags_extra` | no | `''` | Value for `CFLAGS_EXTRA=` on the main build only (not `mpy-cross`), e.g. `-Wno-error` for CLANGARM64 |
+| `variant` | no | `''` | Value for `VARIANT=` on the main build only, omitted from the command line entirely when empty. None of the three current callers ever pass this -- `ports/windows` has no `variants/<name>/` split in any of them, unlike the unix port -- it's here for a future caller whose own fork of the port does define one |
+
+Every path input defaults to a `$(pwd)`-relative value, never an absolute
+one, for the same backslash reason `MPY_DIR` has to be POSIX-style.
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (the input, verbatim) |
 
 ### Usage example
 
