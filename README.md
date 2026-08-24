@@ -172,6 +172,41 @@ one, for the same backslash reason `MPY_DIR` has to be POSIX-style.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (the input, verbatim) |
 
+#### `build-usermod-webassembly-arch`
+
+The `ports/webassembly` usermod build: installs emsdk, builds `mpy-cross`,
+then runs the port build under it, producing a `micropython.mjs` +
+`micropython.wasm` pair.
+
+Requires: `MPY_DIR` and checkout, same as `build-usermod-unix-arch`.
+Combining `FROZEN_MANIFEST` with the port's own default
+(`variants/<variant>/manifest.py`) is deliberately **not** done here --
+every one of `usermod/manifest.py`'s own `try`/`except` tricks in the
+three repos this was extracted from only ever probed
+`$(PORT_DIR)/boards/manifest.py`, which doesn't exist for this port (it
+has `variants/`, not `boards/`) -- so passing that file straight through
+as `FROZEN_MANIFEST` silently dropped the variant's own default (for
+`pyscript`: `asyncio`, backed by a custom JS-runtime scheduler, plus a
+`require()` list of 24 stdlib/utility modules). That was a real gap, not
+a stylistic one -- the `.mjs`/`.wasm` these jobs upload is a build
+artifact real code can import against, not just a test fixture, and
+`tests/`-only coverage never exercises it. Every consuming repo now
+writes its own combined manifest first and passes that as
+`frozen_manifest`.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `variant` | no | `pyscript` | Value for `VARIANT=`. `standard`'s `-s ASYNCIFY` is broken against modern emsdk in multiple ways (tracked upstream at [micropython/micropython#19380](https://github.com/micropython/micropython/issues/19380)); `pyscript` is upstream's own recommended workaround, since it doesn't use `ASYNCIFY` at all |
+| `emsdk_ref` | no | `latest` | emsdk install/activate ref. `latest` matches every caller today and upstream's own `tools/ci.sh` (`ci_webassembly_setup`) -- a moving target, since some future emsdk release could break a build with no change on either side of this action. Override to pin once that actually happens |
+| `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE` | Value for `USER_C_MODULES=` |
+| `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` -- pass a combined manifest (see the note above) unless the module genuinely needs nothing from the variant's own default |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs, e.g. a module's own precision define or a custom `PROG=` |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/wasm` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/webassembly` instead, same as a bare `BUILD=` on the command line always did |
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `micropython.mjs`/`.wasm` without recomputing it |
+
 ### Usage example
 
 ```yaml
