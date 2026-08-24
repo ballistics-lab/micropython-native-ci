@@ -235,6 +235,31 @@ internal submodule tree is never actually touched by this build.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `firmware.uf2` without recomputing it |
 
+#### `build-usermod-qemu-armv7m`
+
+The `ports/qemu` usermod build: installs the arm-none-eabi toolchain, builds
+`mpy-cross`, then runs the port build under it, producing a `firmware.elf`.
+
+QEMU itself is deliberately **not** installed here -- it's a runtime
+emulator for testing the resulting `firmware.elf`, not a build dependency,
+same split `build-usermod-rp2040` uses for the rp2040py emulator. Install
+`qemu-system-arm` (and whatever your own test harness needs, e.g.
+`pyserial`) as a caller-side step, alongside your own `run_qemu.py`-equivalent.
+
+Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `board` | no | `MPS2_AN385` | Value for `BOARD=`. The stock target: a Cortex-M3, no FPU |
+| `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE` | Value for `USER_C_MODULES=` |
+| `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=`. `ports/qemu` ships no `boards/manifest.py` of its own, so there's no port default to combine with here, unlike unix/rp2/esp32 |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command, e.g. a module's own precision define |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/qemu-armv7m` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/qemu` instead, same as a bare `BUILD=` on the command line always did -- pass one to get the port's own `build-$(BOARD)` default |
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `firmware.elf` without recomputing it |
+
 ### Usage example
 
 ```yaml
