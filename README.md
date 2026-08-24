@@ -207,6 +207,34 @@ writes its own combined manifest first and passes that as
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `micropython.mjs`/`.wasm` without recomputing it |
 
+#### `build-usermod-rp2040`
+
+The `ports/rp2` usermod build: installs the arm-none-eabi + CMake toolchain,
+builds `mpy-cross`, then runs the port build under it, producing a
+`firmware.uf2`.
+
+Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`. Plain
+`fetch-micropython` is sufficient here, no `clone-micropython` +
+submodules needed: `ports/rp2/CMakeLists.txt` redirects
+`PICO_TINYUSB_PATH`/`PICO_LWIP_PATH`/`PICO_BTSTACK_PATH`/
+`PICO_CYW43_DRIVER_PATH` at `${MICROPY_DIR}/lib/<name>` -- MicroPython's
+own top-level submodules, which the release tarball already vendors --
+rather than at pico-sdk's own nested vendored copies, so pico-sdk's
+internal submodule tree is never actually touched by this build.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `board` | no | `RPI_PICO` | Value for `BOARD=` |
+| `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE/usermod/micropython.cmake` | Value for `USER_C_MODULES=` -- a *file*, unlike `build-usermod-unix`/`build-usermod-webassembly`'s own `user_c_modules`: CMake's `USER_C_MODULES` takes a single `.cmake` entry point, not a directory to glob |
+| `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command |
+| `extra_cmake_args` | no | `''` | Extra arguments for a direct `cmake -S . -B <build_dir>` reconfigure step run after the port's own first configure. Left empty, the build runs in one `make` invocation. `ports/rp2/Makefile` builds its own cmake arguments with `CMAKE_ARGS +=`, so a define passed straight on the `make` command line replaces the whole accumulated set (including `MICROPY_BOARD`/`USER_C_MODULES`/`MICROPY_FROZEN_MANIFEST`) instead of adding to it -- pass one when the module needs its own CMake define, e.g. `-DMICROPY_C_HEAP_SIZE=131072` |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/rp2040` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/rp2` instead, same as a bare `BUILD=` on the command line always did |
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `firmware.uf2` without recomputing it |
+
 ### Usage example
 
 ```yaml
