@@ -60,20 +60,16 @@ inputs:
       e.g. a module's own precision define.
     required: false
     default: ''
-  build_dir:
-    description: >
-      Value for BUILD=. Defaults to usermod/build/esp32 under the
-      workspace root. A bare relative value (no leading /) resolves against
-      $MPY_DIR/ports/esp32 instead, same as make -C's own relative-path
-      handling -- pass one to get the port's own build-$(BOARD) default.
-    required: false
-    default: ''
 
 outputs:
   build_dir:
     description: >
-      The BUILD= directory actually used (resolved default included), so
-      the caller can find micropython.bin/firmware.bin without recomputing it.
+      The port's own default build-$(BOARD) directory (relative to
+      $MPY_DIR/ports/esp32), so the caller can find
+      micropython.bin/firmware.bin without recomputing it. No build_dir
+      input to override this: see the "Build usermod" step's own comment
+      for why passing BUILD= at all -- not what it's set to -- breaks the
+      port's internal CMake-driven mpy-cross sub-build.
     value: ${{ steps.vars.outputs.build_dir }}
 
 runs:
@@ -84,13 +80,12 @@ runs:
       shell: bash
       run: |
         set -e
-        BUILD="${{ inputs.build_dir }}"
         FM="${{ inputs.frozen_manifest }}"
         UCM="${{ inputs.user_c_modules }}"
         {
           echo "user_c_modules=${UCM:-$GITHUB_WORKSPACE/usermod/micropython.cmake}"
           echo "frozen_manifest=${FM:-$GITHUB_WORKSPACE/usermod/manifest.py}"
-          echo "build_dir=${BUILD:-$GITHUB_WORKSPACE/usermod/build/esp32}"
+          echo "build_dir=build-${{ inputs.board }}"
         } >> "$GITHUB_OUTPUT"
 
     - name: Install esp-idf
@@ -113,11 +108,23 @@ runs:
       # source + make in the same step, not two: export.sh's env doesn't
       # survive a composite action step boundary (each step is a fresh
       # shell invocation), unlike $GITHUB_ENV-based exports.
+      # No BUILD= override, even though it would resolve to the exact same
+      # value (build-$(BOARD)) the port already defaults to: a real CI
+      # failure showed that passing it explicitly -- not what it's set to,
+      # the mere presence of BUILD= on the command line -- makes the port's
+      # own internal CMake-driven mpy-cross sub-build (build-$(BOARD)/mpy-cross,
+      # a separate copy from $MPY_DIR/mpy-cross above) pick up
+      # FROZEN_MANIFEST through MAKEFLAGS and fail with "undefined reference
+      # to mp_qstr_frozen_const_pool" -- the same symptom the explicit
+      # pre-build of $MPY_DIR/mpy-cross exists to prevent, just not reachable
+      # by that fix here since this is CMake's own separate copy, not
+      # py/mkrules.mk's auto-build rule. Every real caller wants the port's
+      # own default anyway (see build_dir's own description above), so this
+      # isn't a capability loss in practice.
       run: |
         source esp-idf/export.sh
         make -C "$MPY_DIR/ports/esp32" \
           BOARD="${{ inputs.board }}" \
-          BUILD="${{ steps.vars.outputs.build_dir }}" \
           USER_C_MODULES="${{ steps.vars.outputs.user_c_modules }}" \
           FROZEN_MANIFEST="${{ steps.vars.outputs.frozen_manifest }}" \
           ${{ inputs.extra_make_args }}

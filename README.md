@@ -273,6 +273,14 @@ this preserves behavior exactly rather than mixing an extraction with a
 new capability. A real follow-up, not forgotten: ESP-IDF's own `--recursive`
 clone is the heaviest single step across every action in this repo.
 
+No `build_dir` input, unlike the sibling actions: a real CI failure showed
+that passing `BUILD=` explicitly on the `make` command line -- regardless
+of the value, even the port's own default -- makes esp32's internal
+CMake-driven `mpy-cross` sub-build (a separate copy from the top-level one
+this action already pre-builds) pick up `FROZEN_MANIFEST` through
+`MAKEFLAGS` and fail with `undefined reference to mp_qstr_frozen_const_pool`.
+The port's own `build-$(BOARD)` default is always used instead.
+
 Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
 
 | Input | Required | Default | Description |
@@ -283,11 +291,10 @@ Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
 | `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE/usermod/micropython.cmake` | Value for `USER_C_MODULES=` -- a *file*, like `build-usermod-rp2040`'s own `user_c_modules` |
 | `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` |
 | `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command |
-| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/esp32` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/esp32` instead -- pass one to get the port's own `build-$(BOARD)` default |
 
 | Output | Description |
 | --- | --- |
-| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `micropython.bin`/`firmware.bin` without recomputing it |
+| `build_dir` | The port's own default `build-$(BOARD)` directory (relative to `$MPY_DIR/ports/esp32`), so the caller can find `micropython.bin`/`firmware.bin` without recomputing it |
 
 ### Usage example
 
