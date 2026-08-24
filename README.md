@@ -315,7 +315,10 @@ jobs:
         with:
           mpy_tag: v1.28.0
 
-      - uses: ballistics-lab/micropython-native-ci/.github/actions/build-natmod@v0.1.0
+      - uses: ballistics-lab/micropython-native-ci/.github/actions/build-natmod-arch@v0.1.0
+        # Still -arch here: the v0.1.0 tag predates the -arch suffix drop
+        # (see CHANGELOG.md's [Unreleased] Changed section) -- build-natmod
+        # (no suffix) only exists past that tag, e.g. pinned to a branch ref.
         with:
           arch: ${{ matrix.arch }}
           # natmod_dir: natmod              # default; a7p passes micropython/natmod
@@ -371,8 +374,19 @@ real CI in the consuming repo, not just written and trusted:
 
 ## Versioning
 
-Pin consumers to a tag (`@v0.1.0`), not `@main` and not a commit SHA.
-Bumping the tag a consumer references is a deliberate, visible edit in
-that repo, same as bumping any other CI dependency -- a change here never
-silently changes what three other repos' builds do. `v0.1.0` is the
-current tag; each of bclibc, a7p and micropython-wasm3 pin to it.
+Pin consumers to a tag, not `@main` and not a commit SHA. Bumping the tag
+a consumer references is a deliberate, visible edit in that repo, same as
+bumping any other CI dependency -- a change here never silently changes
+what three other repos' builds do.
+
+`v0.1.0` is the only tag cut so far (`fetch-micropython`,
+`clone-micropython`, `build-natmod-arch`, `build-usermod-unix-arch` --
+each still under their pre-rename `-arch`-suffixed names at that point).
+Every action added since (`build-usermod-windows`, `-webassembly`,
+`-rp2040`, `-armv7m`, `-esp32`, plus the `-arch` suffix drop itself) only
+exists past that tag -- consuming repos currently reach these by pinning
+to this development branch instead
+(`@claude/usermod-shared-action-kwulzv`), deliberately, while each new
+action is still being proven against real CI one consumer at a time. A
+`v0.2.0` tag, and repinning every consumer's `natmod.yml`/`usermod.yml`
+off the branch ref onto it, is queued but not yet cut.
