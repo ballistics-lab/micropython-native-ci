@@ -260,6 +260,35 @@ Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `firmware.elf` without recomputing it |
 
+#### `build-usermod-esp32`
+
+The `ports/esp32` usermod build: installs ESP-IDF, builds `mpy-cross`,
+then runs the port build under it, producing `micropython.bin`/`firmware.bin`.
+Dumps IDF's own build logs and re-runs `ninja -v` on failure -- idf.py's
+own console output swallows the actual compiler diagnostic on a failing
+build, printing only "ninja failed with exit code 1".
+
+No caching yet -- every consumer's original recipe had none either, so
+this preserves behavior exactly rather than mixing an extraction with a
+new capability. A real follow-up, not forgotten: ESP-IDF's own `--recursive`
+clone is the heaviest single step across every action in this repo.
+
+Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
+
+| Input | Required | Default | Description |
+| --- | --- | --- | --- |
+| `board` | no | `ESP32_GENERIC` | Value for `BOARD=` |
+| `idf_target` | no | `esp32` | Chip family passed to `install.sh` (e.g. `esp32`, `esp32s3`). Deliberately separate from `board`, not derived from it -- more than one board can exist per chip family |
+| `idf_ver` | no | `v5.5.1` | ESP-IDF version tag to clone |
+| `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE/usermod/micropython.cmake` | Value for `USER_C_MODULES=` -- a *file*, like `build-usermod-rp2040`'s own `user_c_modules` |
+| `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=` |
+| `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/esp32` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/esp32` instead -- pass one to get the port's own `build-$(BOARD)` default |
+
+| Output | Description |
+| --- | --- |
+| `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `micropython.bin`/`firmware.bin` without recomputing it |
+
 ### Usage example
 
 ```yaml
