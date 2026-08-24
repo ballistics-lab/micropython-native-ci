@@ -235,7 +235,7 @@ internal submodule tree is never actually touched by this build.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find `firmware.uf2` without recomputing it |
 
-#### `build-usermod-qemu-armv7m`
+#### `build-usermod-armv7m`
 
 The `ports/qemu` usermod build: installs the arm-none-eabi toolchain, builds
 `mpy-cross`, then runs the port build under it, producing a `firmware.elf`.
@@ -254,7 +254,7 @@ Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
 | `user_c_modules` | no | `''` → `$GITHUB_WORKSPACE` | Value for `USER_C_MODULES=` |
 | `frozen_manifest` | no | `''` → `$GITHUB_WORKSPACE/usermod/manifest.py` | Value for `FROZEN_MANIFEST=`. `ports/qemu` ships no `boards/manifest.py` of its own, so there's no port default to combine with here, unlike unix/rp2/esp32 |
 | `extra_make_args` | no | `''` | Extra space-separated `VAR=value` pairs appended to the build command, e.g. a module's own precision define |
-| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/qemu-armv7m` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/qemu` instead, same as a bare `BUILD=` on the command line always did -- pass one to get the port's own `build-$(BOARD)` default |
+| `build_dir` | no | `''` → `$GITHUB_WORKSPACE/usermod/build/armv7m` | Value for `BUILD=`. A bare relative value (no leading `/`) resolves against `$MPY_DIR/ports/qemu` instead, same as a bare `BUILD=` on the command line always did -- pass one to get the port's own `build-$(BOARD)` default |
 
 | Output | Description |
 | --- | --- |

@@ -1,4 +1,4 @@
-name: Build usermod qemu-armv7m
+name: Build usermod armv7m
 description: >
   Builds a MicroPython ports/qemu "usermod" (a C module compiled straight
   into the port via USER_C_MODULES=) into a firmware.elf for the given
@@ -40,7 +40,7 @@ inputs:
     default: ''
   build_dir:
     description: >
-      Value for BUILD=. Defaults to usermod/build/qemu-armv7m under the
+      Value for BUILD=. Defaults to usermod/build/armv7m under the
       workspace root. A bare relative value (no leading /) resolves against
       $MPY_DIR/ports/qemu instead, same as make -C's own relative-path
       handling -- pass one when the caller wants the port's own
@@ -69,7 +69,7 @@ runs:
         {
           echo "user_c_modules=${UCM:-$GITHUB_WORKSPACE}"
           echo "frozen_manifest=${FM:-$GITHUB_WORKSPACE/usermod/manifest.py}"
-          echo "build_dir=${BUILD:-$GITHUB_WORKSPACE/usermod/build/qemu-armv7m}"
+          echo "build_dir=${BUILD:-$GITHUB_WORKSPACE/usermod/build/armv7m}"
         } >> "$GITHUB_OUTPUT"
 
     - name: Install toolchain
@@ -88,7 +88,7 @@ runs:
       # every other action here uses.
       run: make -C "$MPY_DIR/mpy-cross" -j"$(nproc)"
 
-    - name: Build usermod (qemu, ${{ inputs.board }})
+    - name: Build usermod (armv7m, ${{ inputs.board }})
       shell: bash
       run: |
         make -C "$MPY_DIR/ports/qemu" BOARD="${{ inputs.board }}" \
