@@ -6,7 +6,7 @@ description: >
 
   Requires MPY_DIR to already be exported (fetch-micropython or
   clone-micropython) and the calling repo already checked out -- same
-  contract as build-usermod-unix-arch. Combining FROZEN_MANIFEST with the
+  contract as build-usermod-unix. Combining FROZEN_MANIFEST with the
   port's own default (variants/<variant>/manifest.py) is deliberately left
   to the caller, not done here: usermod/manifest.py's own try/except only
   ever probes $(PORT_DIR)/boards/manifest.py, which doesn't exist for this
@@ -102,7 +102,7 @@ runs:
     - name: Build usermod (webassembly, ${{ inputs.variant }} variant)
       shell: bash
       # BUILD is a local shell var, not a job/step env -- see
-      # build-usermod-unix-arch's identical reasoning (leaks into the
+      # build-usermod-unix's identical reasoning (leaks into the
       # "Build mpy-cross" step above otherwise, via py/mkenv.mk's
       # BUILD ?= build).
       run: |

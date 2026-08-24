@@ -57,7 +57,7 @@ inputs:
       Value for VARIANT= on the main build only (not mpy-cross). Empty by
       default and then omitted from the command line entirely, matching
       every caller this was extracted from -- none of them ever passed
-      VARIANT= for ports/windows (unlike build-usermod-unix-arch's own
+      VARIANT= for ports/windows (unlike build-usermod-unix's own
       `variant`, ports/windows has no variants/<name>/ split in any of
       those three repos, just a bare variants/manifest.py default). Here
       for a future caller whose own fork of the port does define one.

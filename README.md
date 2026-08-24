@@ -52,7 +52,7 @@ Downloads and extracts a MicroPython release tarball, exports `MPY_DIR`.
 Use for a plain natmod build or a unix-port build; the tarball already
 vendors every port's `lib/` submodules, so no submodule init is needed.
 Not usable on a Windows runner outside MSYS2 -- it shells out to `wget`,
-which plain Git Bash doesn't have (see `build-usermod-windows-arch` below
+which plain Git Bash doesn't have (see `build-usermod-windows` below
 for why the Windows actions never call it either).
 
 | Input | Required | Default | Description |
@@ -80,7 +80,7 @@ jobs use it, any time the caller needs `MPY_DIR` set without dragging in
 
 No outputs; exports `MPY_DIR` to `$GITHUB_ENV` as a side effect.
 
-#### `build-natmod-arch`
+#### `build-natmod`
 
 Installs whatever toolchain a single `dynruntime.mk` `ARCH` needs (plain
 apt package, the `xtensa-lx106` tarball, or esp-idf -- dispatched per
@@ -100,7 +100,7 @@ submodules included if the natmod Makefile needs any.
 
 No outputs.
 
-#### `build-usermod-unix-arch`
+#### `build-usermod-unix`
 
 The unix-port cross-compile matrix for a `USER_C_MODULES` usermod: `x64`,
 `x86` (32-bit), `aarch64`, `armhf`, or `mipsel`. Installs the arch's
@@ -108,7 +108,7 @@ toolchain (apt package, qemu-user-static for the emulated ones, a
 from-source libffi for the statically-linked ones), builds `mpy-cross`,
 then runs the port build.
 
-Requires: `MPY_DIR` and checkout, same as `build-natmod-arch`. The
+Requires: `MPY_DIR` and checkout, same as `build-natmod`. The
 caller's own matrix still has to choose `runs-on:` per arch
 (`ubuntu-24.04-arm` for `aarch64`/`armhf` -- both execute natively there,
 not under an emulator; `ubuntu-latest` for the rest, `mipsel` included --
@@ -128,7 +128,7 @@ composite action can't pick its own runner.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (resolved default included), so the caller can find the built binary without recomputing it |
 
-#### `build-usermod-windows-arch`
+#### `build-usermod-windows`
 
 The `ports/windows` half of the same usermod build, run inside an MSYS2
 shell (every step is `shell: msys2 {0}`): builds `mpy-cross` then the
@@ -137,7 +137,7 @@ consuming repo's Windows row needed (`LDFLAGS_ARCH`/`COMPILER_TARGET`
 because CLANGARM64 links via clang+lld rather than GNU ld/gcc,
 `STRIP=""`/`SIZE="true"` because that toolchain ships neither binary).
 
-Deliberately narrower than `build-usermod-unix-arch`: fetching MicroPython
+Deliberately narrower than `build-usermod-unix`: fetching MicroPython
 and setting up MSYS2 both stay the caller's own job. Requires:
 
 - `MPY_DIR`, exported to a **POSIX-style path** (no backslashes -- MSYS2
@@ -172,13 +172,13 @@ one, for the same backslash reason `MPY_DIR` has to be POSIX-style.
 | --- | --- |
 | `build_dir` | The `BUILD=` directory actually used (the input, verbatim) |
 
-#### `build-usermod-webassembly-arch`
+#### `build-usermod-webassembly`
 
 The `ports/webassembly` usermod build: installs emsdk, builds `mpy-cross`,
 then runs the port build under it, producing a `micropython.mjs` +
 `micropython.wasm` pair.
 
-Requires: `MPY_DIR` and checkout, same as `build-usermod-unix-arch`.
+Requires: `MPY_DIR` and checkout, same as `build-usermod-unix`.
 Combining `FROZEN_MANIFEST` with the port's own default
 (`variants/<variant>/manifest.py`) is deliberately **not** done here --
 every one of `usermod/manifest.py`'s own `try`/`except` tricks in the
@@ -226,7 +226,7 @@ jobs:
         with:
           mpy_tag: v1.28.0
 
-      - uses: ballistics-lab/micropython-native-ci/.github/actions/build-natmod-arch@v0.1.0
+      - uses: ballistics-lab/micropython-native-ci/.github/actions/build-natmod@v0.1.0
         with:
           arch: ${{ matrix.arch }}
           # natmod_dir: natmod              # default; a7p passes micropython/natmod
@@ -261,7 +261,7 @@ usermod/
   manifest.py
 ```
 
-`build-natmod-arch` only assumes `natmod/Makefile` (or whatever
+`build-natmod` only assumes `natmod/Makefile` (or whatever
 `natmod_dir` points at) accepts `ARCH=` and `MPY_DIR=` and has a `dist`
 target that drops the built `.mpy` under `build/<arch>*/`. Nothing here
 assumes a specific module name, precision scheme, or test framework --
@@ -273,7 +273,7 @@ Not done yet, deliberately -- each of these needs to be verified against
 real CI in the consuming repo, not just written and trusted:
 
 - A reusable `workflow_call` for the full natmod build+test matrix
-  (build-natmod-arch already covers the highest-drift part of it).
+  (build-natmod already covers the highest-drift part of it).
 - A reusable `workflow_call` for the "armv7emsp / armv7emdp on real ARM
   Linux" test job -- currently near-identical hand-copied YAML in all
   three source repos.

@@ -91,7 +91,7 @@ runs:
             STANDALONE=1
             ;;
           *)
-            echo "::error::build-usermod-unix-arch: unknown arch '$ARCH'"
+            echo "::error::build-usermod-unix: unknown arch '$ARCH'"
             exit 1
             ;;
         esac
@@ -126,7 +126,7 @@ runs:
         esac
         # apt-get update first -- the runner image's baked-in package index
         # can already be stale by the time a job runs (404 Not Found on
-        # install rather than a version error) -- same issue build-natmod-arch
+        # install rather than a version error) -- same issue build-natmod
         # guards against.
         sudo apt-get update -q
         sudo apt-get install -y $PKGS
